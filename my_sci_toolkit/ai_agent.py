@@ -99,6 +99,21 @@ class RuleAgentEngine:
                 }
             }
 
+        # Intent 5: CP2K input builder from CIF
+        if "cp2k" in text_lower or ("输入卡" in text and "cif" in text_lower):
+            cif_file = "aimd.cif"
+            m = re.search(r"([\w\-_\.]+\.cif)", text, re.IGNORECASE)
+            if m:
+                cif_file = m.group(1)
+            return {
+                "tool": "build_cp2k_from_cif",
+                "args": {
+                    "cif_path": cif_file,
+                    "output_inp": "cp2k.inp",
+                    "run_type": "GEO_OPT",
+                }
+            }
+
         return None
 
 

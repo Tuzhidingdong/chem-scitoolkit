@@ -1,7 +1,7 @@
 """Unified curve fitting and regression structures."""
 
 from dataclasses import dataclass
-from typing import Dict, Any, Callable, Tuple, Optional
+from typing import Dict, Any, Callable, Tuple, Optional, Sequence
 import numpy as np
 from scipy.optimize import curve_fit
 

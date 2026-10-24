@@ -6,6 +6,7 @@ Integrated modules:
 - kinetics: Reaction rate laws, Arrhenius analysis, nucleation-growth simulations, and energy diagrams.
 - electrochem: Battery charge/discharge, differential capacity dQ/dV, and impedance analysis.
 - spectro: High-impact XRD, FTIR, Raman, XPS, and EPR spectrum processing.
+- simulation: Multi-code quantum chemistry & MD engineering (CP2K, VASP, ORCA, Multiwfn, LAMMPS, SLURM).
 - viz: Publication-grade styling (Nature, JACS) and composite plotting.
 - ai_agent: Natural language interface and tool orchestrator.
 """
@@ -35,6 +36,9 @@ from my_sci_toolkit.spectro.xrd import (
     plot_xrd_pattern,
     plot_xrd_stack,
 )
+from my_sci_toolkit.simulation.cp2k import (
+    build_cp2k_from_cif,
+)
 
 __version__ = "0.1.0"
 
@@ -53,4 +57,5 @@ __all__ = [
     "calculate_dqdv",
     "plot_xrd_pattern",
     "plot_xrd_stack",
+    "build_cp2k_from_cif",
 ]

@@ -23,7 +23,8 @@
   - [2.6 `io` 结构与表格数据 I/O 模块](#26-io-结构与表格数据-io-模块)
   - [2.7 `structure` 晶体几何计算模块](#27-structure-晶体几何计算模块)
   - [2.8 `md` 分子动力学后处理模块](#28-md-分子动力学后处理模块)
-  - [2.9 `ai_agent` 自然语言交互引擎](#29-ai_agent-自然语言交互引擎)
+  - [2.9 `simulation` 计算化学与分子模拟模块 (CP2K/VASP/ORCA/Multiwfn/LAMMPS/SLURM)](#29-simulation-计算化学与分子模拟模块-cp2kvasporcamultiwfnlammpsslurm)
+  - [2.10 `ai_agent` 自然语言交互引擎](#210-ai_agent-自然语言交互引擎)
 - [3. 典型场景代码示例](#3-典型场景代码示例)
 - [4. 自然语言命令行调用 (CLI)](#4-自然语言命令行调用-cli)
 - [5. GitHub 开源工程初始化与推送指南](#5-github-开源工程初始化与推送指南)
@@ -193,7 +194,30 @@ pip install chem-scitoolkit
 
 ---
 
-### 2.9 `ai_agent` 自然语言交互引擎
+### 2.9 `simulation` 计算化学与分子模拟模块 (CP2K/VASP/ORCA/Multiwfn/LAMMPS/SLURM)
+
+| 子模块 / 接口 | 核心入参 (Signature) | 功能说明 | 快速调用示例 |
+|---|---|---|---|
+| `cp2k.build_cp2k_from_cif` | `cif_path, output_inp="cp2k.inp", run_type="GEO_OPT", functional="PBE"` | 读取晶体 CIF 结构，一键生成生产级 CP2K 输入卡 (含 OT/基组/赝势) | `build_cp2k_from_cif("aimd.cif", "cp2k.inp")` |
+| `cp2k.CP2KInputBuilder` | `project_name, run_type, functional, cutoff_ry=400` | 模块化 CP2K 输入构建器，支持细粒度参数配置 | `CP2KInputBuilder().build_from_structure(cell, atoms)` |
+| `cp2k.generate_distance_colvar` | `atom_a, atom_b, colvar_id=1` | 生成 CP2K 元动力学/约束势距离集合变量块 | `block = generate_distance_colvar(1, 2)` |
+| `cp2k.CP2KParser` | `log_path: str \| Path` | 解析 CP2K 计算日志能量轨迹、收敛状态与 SCF 迭代 | `e = CP2KParser("cp2k.out").get_final_energy()` |
+| `vasp.write_vasp_inputs` | `output_dir, incar_params=None, kpoints_mesh=(3,3,1)` | 批量输出规范化 VASP INCAR 与 KPOINTS 输入文件 | `write_vasp_inputs("./calc", incar_params={"ENCUT": 500})` |
+| `vasp.VASPParser` | `log_path: str \| Path` | 解析 OUTCAR 与 OSZICAR，提取自由能轨迹与离子步收敛 | `e_tot = VASPParser("OUTCAR").get_final_energy()` |
+| `orca.write_orca_input` | `output_path, atoms, method="B3LYP", basis="def2-SVP", task="Opt Freq"` | 生成标准 ORCA 量化输入卡，支持溶剂化与多核并行设置 | `write_orca_input("orca.inp", atoms, task="Opt Freq")` |
+| `orca.ORCAParser` | `log_path: str \| Path` | 解析 ORCA 日志提取单点能/优化能与红外振动谐振频率列表 | `freqs = ORCAParser("orca.out").parse_vibrational_frequencies()` |
+| `multiwfn.MultiwfnRunner` | `custom_path=None` | Multiwfn 自动路径探测器与静默无头菜单命令批处理管道 | `runner = MultiwfnRunner(); res = runner.run_commands(...)` |
+| `multiwfn.run_bader_charge_analysis` | `cube_file, multiwfn_path=None` | 自动化 Bader 电子密度盆分析与电荷积分 | `run_bader_charge_analysis("density.cube")` |
+| `multiwfn.calculate_cohp_fragments` | `wfn_file, fragment_1="e Fe", fragment_2="e Te", energy_range="-12,4,2"` | 自动化 Multiwfn 计算双片段晶体轨道哈密顿布居 (COHP) | `calculate_cohp_fragments("aimd.wfn", "e Fe", "e Te")` |
+| `lammps.write_lammps_data` | `output_path, box_bounds, atoms, masses, title=...` | 生成标准全格式 (full-style) LAMMPS *.data 结构文件 | `write_lammps_data("system.data", box, atoms, masses)` |
+| `lammps.LAMMPSInputBuilder` | `data_file, timestep_fs=1.0, ensemble="nvt", steps=50000` | 构建 TIP4P/2005 水模型或经典分子动力学 control 脚本 | `LAMMPSInputBuilder().build_tip4p_water_script()` |
+| `ml_potentials.generate_mace_training_command` | `name, train_file, valid_file, r_max=5.0, batch_size=16` | 自动生成 MACE 神经网络等变势函数训练 CLI 命令 | `cmd = generate_mace_training_command(...)` |
+| `ml_potentials.MLPDynamicsRunner` | `model_path, calculator_type="mace", device="cuda"` | 基于 ASE 的机器学习势驱动分子动力学与显存防护调度器 (WIP) | `runner = MLPDynamicsRunner("model.model")` |
+| `slurm.generate_slurm_script` | `job_name, software="cp2k", nodes=1, ntasks_per_node=64` | 自动生成超算集群通用 sbatch 提交作业脚本 (*.sh) | `generate_slurm_script("opt", software="cp2k", nodes=2)` |
+
+---
+
+### 2.10 `ai_agent` 自然语言交互引擎
 
 | 类 / 方法 | 核心入参 (Signature) | 功能说明 | 快速调用示例 |
 |---|---|---|---|

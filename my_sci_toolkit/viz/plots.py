@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 from pathlib import Path
-from typing import Sequence, Optional, List, Dict
+from typing import Sequence, Optional, List, Dict, Any
 from my_sci_toolkit.viz.style import apply_style, get_figure_dimensions, PALETTES
 from my_sci_toolkit.io.export import save_publication_figure
 from my_sci_toolkit.registry import tool
