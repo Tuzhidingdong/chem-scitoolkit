@@ -1,0 +1,82 @@
+[build-system]
+requires = ["hatchling>=1.18.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "chem-scitoolkit"
+version = "0.1.0"
+description = "A modular scientific computing & publication plotting toolkit with natural language interface."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "Scientific Computing Team", email = "sci-toolkit@example.org" }
+]
+maintainers = [
+    { name = "Scientific Computing Team" }
+]
+keywords = [
+    "chemistry",
+    "kinetics",
+    "electrochemistry",
+    "spectroscopy",
+    "crystallography",
+    "molecular-dynamics",
+    "ai-agent",
+    "publication-plots"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Chemistry",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "numpy>=1.22.0",
+    "scipy>=1.8.0",
+    "pandas>=1.4.0",
+    "matplotlib>=3.5.0",
+    "openpyxl>=3.0.0",
+]
+
+[project.optional-dependencies]
+chem = [
+    "pymatgen>=2022.0.0",
+    "ase>=3.22.0",
+]
+md = [
+    "MDAnalysis>=2.0.0",
+]
+electrochem = [
+    "impedance>=1.4.0",
+]
+ai = [
+    "google-genai>=0.1.0",
+]
+all = [
+    "chem-scitoolkit[chem,md,electrochem,ai]",
+]
+dev = [
+    "pytest>=7.0.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
+
+[project.scripts]
+my-sci = "my_sci_toolkit.cli:main"
+
+[project.urls]
+"Homepage" = "https://github.com/your-username/chem-scitoolkit"
+"Source" = "https://github.com/your-username/chem-scitoolkit"
+"Bug Tracker" = "https://github.com/your-username/chem-scitoolkit/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["my_sci_toolkit"]
