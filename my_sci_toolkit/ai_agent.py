@@ -1,11 +1,16 @@
-"""Natural Language Interface and Autonomous Scientific Agent.
+"""Natural Language Interface and Scientific AI Agent.
 
-Supports both online LLM function calling (Gemini API) and offline deterministic rule matching.
+Supports:
+1. Free local open-source LLMs via Ollama / OpenAI-compatible local endpoints (e.g. qwen2.5-coder, llama3.1).
+2. Remote API backends (e.g. Google Gemini API via GEMINI_API_KEY).
+3. Deterministic offline semantic rule matching (zero network, zero API key).
 """
 
 import os
 import re
 import json
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 from my_sci_toolkit.registry import REGISTRY
@@ -13,32 +18,30 @@ from my_sci_toolkit.config import GLOBAL_CONFIG
 
 
 class RuleAgentEngine:
-    """Offline rule-based semantic parser for robust local scientific queries."""
+    """Offline rule-based semantic parser for deterministic scientific query routing."""
 
     def parse_intent(self, text: str) -> Optional[Dict[str, Any]]:
         text_lower = text.lower()
 
-        # Intent 1: Comparison of reaction completion time (e.g. 40min capillary vs 26h bulk water)
-        # Matches user prompt: "帮我绘制 40min 毛细凝聚与 26h 体相水氧化的对比动力学图"
-        if ("对比" in text or "compare" in text_lower or "完成时间" in text or "柱状" in text or "completion" in text_lower) and \
-           ("动力学" in text or "氧化" in text or "kinetic" in text_lower):
+        # Intent 1: Comparison of reaction completion time (e.g., 40min capillary vs 26h bulk water oxidation)
+        if ("compare" in text_lower or "comparison" in text_lower or "completion" in text_lower or "bar" in text_lower) and \
+           ("kinetic" in text_lower or "oxidation" in text_lower or "reaction" in text_lower):
             
-            # Extract time components
             systems = []
             times_h = []
             labels = []
 
-            if "毛细" in text or "capillary" in text_lower or "40min" in text_lower or "40 min" in text_lower:
+            if "capillary" in text_lower or "40min" in text_lower or "40 min" in text_lower:
                 systems.append("Capillary")
                 times_h.append(40.0 / 60.0)
                 labels.append("40 min")
 
-            if "体相" in text or "bulk" in text_lower or "26h" in text_lower or "26 h" in text_lower:
+            if "bulk" in text_lower or "26h" in text_lower or "26 h" in text_lower:
                 systems.append("Bulk water")
                 times_h.append(26.0)
                 labels.append("26 h")
 
-            if "空气" in text or "air" in text_lower or "280h" in text_lower or "280 h" in text_lower:
+            if "air" in text_lower or "280h" in text_lower or "280 h" in text_lower:
                 systems.append("Air")
                 times_h.append(280.0)
                 labels.append("280 h")
@@ -54,12 +57,12 @@ class RuleAgentEngine:
                     "systems": systems,
                     "times_h": times_h,
                     "unit_labels": labels,
-                    "title": "FeS Oxidation Completion Time Comparison",
+                    "title": "Oxidation Completion Time Comparison",
                 }
             }
 
         # Intent 2: Free energy pathway / reaction steps (HER, CO2RR, etc.)
-        if "台阶图" in text or "能垒" in text or "自由能" in text or "energy profile" in text_lower or "her" in text_lower:
+        if "energy profile" in text_lower or "free energy" in text_lower or "step diagram" in text_lower or "her" in text_lower:
             return {
                 "tool": "plot_free_energy_profile",
                 "args": {
@@ -73,7 +76,7 @@ class RuleAgentEngine:
             }
 
         # Intent 3: Battery charge/discharge or cycling
-        if "充放电" in text or "battery" in text_lower or "循环" in text:
+        if "charge" in text_lower or "discharge" in text_lower or "battery" in text_lower or "cycle" in text_lower:
             return {
                 "tool": "plot_charge_discharge",
                 "args": {
@@ -85,7 +88,7 @@ class RuleAgentEngine:
             }
 
         # Intent 4: d-spacing crystal calculation
-        if "晶面间距" in text or "d-spacing" in text_lower:
+        if "d-spacing" in text_lower or "interplanar" in text_lower or "lattice plane" in text_lower:
             return {
                 "tool": "calculate_d_spacing",
                 "args": {
@@ -100,7 +103,7 @@ class RuleAgentEngine:
             }
 
         # Intent 5: CP2K input builder from CIF
-        if "cp2k" in text_lower or ("输入卡" in text and "cif" in text_lower):
+        if "cp2k" in text_lower or ("cif" in text_lower and ("input" in text_lower or "build" in text_lower or "generate" in text_lower)):
             cif_file = "aimd.cif"
             m = re.search(r"([\w\-_\.]+\.cif)", text, re.IGNORECASE)
             if m:
@@ -117,44 +120,146 @@ class RuleAgentEngine:
         return None
 
 
-class Agent:
-    """Scientific AI Agent translating natural language instructions into tool executions."""
+class LocalOpenAIPlanner:
+    """Planner interfacing with local open-source LLMs (Ollama, vLLM, LM Studio)."""
 
     def __init__(
         self,
-        backend: str = "auto",
-        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        timeout_sec: int = 30,
+    ):
+        # Default to local Ollama v1 endpoint
+        raw_url = base_url or os.getenv("LOCAL_LLM_URL") or os.getenv("OPENAI_BASE_URL") or "http://localhost:11434/v1"
+        self.base_url = raw_url.rstrip("/")
+        self.model = model or os.getenv("LOCAL_LLM_MODEL") or "qwen2.5-coder"
+        self.api_key = api_key or os.getenv("LOCAL_LLM_API_KEY") or os.getenv("OPENAI_API_KEY") or "ollama"
+        self.timeout_sec = timeout_sec
+
+    def plan(self, prompt: str) -> Optional[Dict[str, Any]]:
+        """Query local model endpoint using JSON tool-calling or structured system prompt."""
+        tools = REGISTRY.list_tools()
+        tools_summary = []
+        for t in tools:
+            tools_summary.append({
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["parameters"],
+            })
+
+        system_prompt = (
+            "You are a scientific AI assistant for the Python package 'chem-scitoolkit'. "
+            "Your task is to map user natural language instructions to an available scientific tool and extract parameters.\n"
+            "Respond ONLY with a JSON object containing two keys: 'tool' (string) and 'args' (dictionary of arguments).\n"
+            "Do not include any conversational filler or markdown formatting outside the JSON.\n\n"
+            f"Available tools catalog:\n{json.dumps(tools_summary, indent=2)}"
+        )
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0.0,
+            "stream": False,
+        }
+
+        url = f"{self.base_url}/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+            "User-Agent": "chem-scitoolkit-local-agent",
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_sec) as response:
+                res_body = response.read().decode("utf-8")
+                res_json = json.loads(res_body)
+
+                choices = res_json.get("choices", [])
+                if not choices:
+                    return None
+
+                content = choices[0].get("message", {}).get("content", "").strip()
+
+                # Extract JSON block
+                m = re.search(r"\{.*\}", content, re.DOTALL)
+                if m:
+                    parsed = json.loads(m.group(0))
+                    if "tool" in parsed and "args" in parsed:
+                        return parsed
+
+        except Exception:
+            # Silently fallback if local server is offline or unreachable
+            return None
+
+        return None
+
+
+class Agent:
+    """Unified Scientific AI Agent supporting local open-source LLMs, Gemini, and offline rules."""
+
+    def __init__(
+        self,
+        backend: str = "auto",  # 'auto', 'local', 'ollama', 'gemini', 'rules'
+        local_url: Optional[str] = None,
+        local_model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        gemini_model: Optional[str] = None,
         output_dir: Optional[str | Path] = None,
     ):
         self.output_dir = GLOBAL_CONFIG.ensure_output_dir(output_dir)
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        self.model = model or GLOBAL_CONFIG.gemini_model
+        self.backend = backend.lower()
         self.rule_engine = RuleAgentEngine()
+        self.local_planner = LocalOpenAIPlanner(base_url=local_url, model=local_model)
 
-        if backend == "auto":
-            self.backend = "gemini" if self.api_key else "rules"
-        else:
-            self.backend = backend
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
+        self.gemini_model = gemini_model or GLOBAL_CONFIG.gemini_model
 
     def run(self, prompt: str, dry_run: bool = False) -> Dict[str, Any]:
-        """Execute or preview a natural language request.
+        """Execute or preview a natural language scientific request.
 
         Args:
-            prompt: User natural language prompt (e.g. "帮我绘制 40min 毛细凝聚与 26h 体相水氧化的对比动力学图").
-            dry_run: If True, returns tool selection and planned arguments without actual file execution.
+            prompt: User natural language instruction.
+            dry_run: If True, previews mapped tool and arguments without execution.
 
         Returns:
-            Dict containing tool execution result, mapped arguments, and generated artifacts.
+            Dict containing tool execution result, mapped arguments, and artifacts.
         """
         plan = None
 
-        # Attempt offline rule-based parser first
-        rule_plan = self.rule_engine.parse_intent(prompt)
-        if rule_plan:
-            plan = rule_plan
-        elif self.backend == "gemini" and self.api_key:
+        # 1. If backend specified as 'local' or 'ollama', attempt local open-source LLM first
+        if self.backend in ("local", "ollama"):
+            plan = self.local_planner.plan(prompt)
+
+        # 2. If backend specified as 'gemini', attempt Gemini API
+        elif self.backend == "gemini":
             plan = self._call_gemini_planner(prompt)
+
+        # 3. If 'auto': try local Ollama -> try Gemini API -> fallback to deterministic rules
+        elif self.backend == "auto":
+            plan = self.local_planner.plan(prompt)
+            if not plan and self.api_key:
+                plan = self._call_gemini_planner(prompt)
+            if not plan:
+                plan = self.rule_engine.parse_intent(prompt)
+
+        # 4. If 'rules': use deterministic rules directly
+        else:
+            plan = self.rule_engine.parse_intent(prompt)
+
+        # Ultimate fallback to deterministic rules if model outputs failed
+        if not plan:
+            plan = self.rule_engine.parse_intent(prompt)
 
         if not plan:
             return {
@@ -163,17 +268,17 @@ class Agent:
                 "available_tools": [t["name"] for t in REGISTRY.list_tools()],
             }
 
-        tool_name = plan["tool"]
-        tool_args = plan["args"]
+        tool_name = plan.get("tool")
+        tool_args = plan.get("args", {})
         func = REGISTRY.get_tool(tool_name)
 
         if not func:
             return {
                 "status": "error",
-                "message": f"Tool '{tool_name}' is not registered.",
+                "message": f"Tool '{tool_name}' is not registered in the toolkit.",
             }
 
-        # Auto inject save_path if the tool produces a figure
+        # Automatically supply output save_path if function accepts it
         if "save_path" in func.__code__.co_varnames and "save_path" not in tool_args:
             target_fig = self.output_dir / f"{tool_name}_output.png"
             tool_args["save_path"] = str(target_fig)
@@ -195,7 +300,7 @@ class Agent:
                 "args": tool_args,
                 "result": result,
                 "artifact": tool_args.get("save_path"),
-                "message": f"Successfully executed tool '{tool_name}'. Output saved to: {tool_args.get('save_path')}",
+                "message": f"Successfully executed '{tool_name}'. Artifact saved to: {tool_args.get('save_path')}",
             }
         except Exception as e:
             return {
@@ -206,7 +311,7 @@ class Agent:
             }
 
     def _call_gemini_planner(self, prompt: str) -> Optional[Dict[str, Any]]:
-        """Call Gemini function calling API when credentials are provided."""
+        """Call Google Gemini Function Calling API."""
         try:
             from google import genai
             from google.genai import types
@@ -215,7 +320,7 @@ class Agent:
             tools_spec = REGISTRY.get_declarations_for_llm()
 
             response = client.models.generate_content(
-                model=self.model,
+                model=self.gemini_model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     tools=tools_spec,
@@ -223,7 +328,6 @@ class Agent:
                 ),
             )
 
-            # Extract tool calls from candidates
             if response.candidates and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, "function_call") and part.function_call:
@@ -232,8 +336,7 @@ class Agent:
                             "tool": fc.name,
                             "args": dict(fc.args),
                         }
-        except Exception as ex:
-            # Fallback smoothly to rule engine on network or credential failures
-            return self.rule_engine.parse_intent(prompt)
+        except Exception:
+            return None
 
         return None

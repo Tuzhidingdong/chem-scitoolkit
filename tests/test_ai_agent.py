@@ -5,7 +5,7 @@ from my_sci_toolkit.ai_agent import Agent
 
 def test_agent_kinetics_comparison_mapping():
     agent = Agent(backend="rules")
-    prompt = "帮我绘制 40min 毛细凝聚与 26h 体相水氧化的对比动力学图"
+    prompt = "Plot comparison kinetics of 40min capillary vs 26h bulk water oxidation"
     plan = agent.run(prompt, dry_run=True)
 
     assert plan["status"] == "dry_run"
@@ -17,9 +17,19 @@ def test_agent_kinetics_comparison_mapping():
 
 def test_agent_free_energy_mapping():
     agent = Agent(backend="rules")
-    prompt = "绘制反应台阶图与中间体能垒"
+    prompt = "Plot reaction intermediate free energy step diagram"
     plan = agent.run(prompt, dry_run=True)
 
     assert plan["status"] == "dry_run"
     assert plan["tool"] == "plot_free_energy_profile"
     assert "pathways" in plan["args"]
+
+
+def test_agent_cp2k_mapping():
+    agent = Agent(backend="rules")
+    prompt = "Build cp2k input file from structure aimd.cif"
+    plan = agent.run(prompt, dry_run=True)
+
+    assert plan["status"] == "dry_run"
+    assert plan["tool"] == "build_cp2k_from_cif"
+    assert plan["args"]["cif_path"] == "aimd.cif"

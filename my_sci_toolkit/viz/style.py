@@ -26,7 +26,7 @@ def apply_style(
     """
     rc_params: Dict[str, Any] = {
         "font.family": "sans-serif",
-        "font.sans-serif": [font_family, "Helvetica", "SimHei", "DejaVu Sans"],
+        "font.sans-serif": [font_family, "Helvetica", "Arial", "DejaVu Sans"],
         "font.size": font_size,
         "axes.titlesize": font_size,
         "axes.labelsize": font_size,

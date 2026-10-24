@@ -1,28 +1,36 @@
 """Example 4: Natural Language Interface Agent Demonstration.
 
-Demonstrates how users can query scientific plotting via natural language in Python.
+Demonstrates querying scientific calculations and publication plotting via natural language
+using local open-source LLMs (Ollama qwen2.5-coder) or deterministic offline rules.
 """
 
 from my_sci_toolkit import Agent
 
-# Initialize agent (uses offline rule engine or online Gemini if GEMINI_API_KEY is available)
-agent = Agent(output_dir="./outputs")
+# 1. Initialize agent with local open-source LLM or offline rules
+# If you have Ollama running locally (`ollama run qwen2.5-coder`), it will automatically
+# translate your natural language requests to precise tool parameters.
+agent = Agent(backend="auto", output_dir="./outputs")
 
-print("--- Query 1: Preview Dry-run ---")
-query_1 = "帮我绘制 40min 毛细凝聚与 26h 体相水氧化的对比动力学图"
+print("--- Query 1: Comparative Kinetics (Dry-run preview) ---")
+query_1 = "Plot comparison kinetics of 40min capillary vs 26h bulk water oxidation"
 preview = agent.run(query_1, dry_run=True)
-print("Plan:", preview)
+print("Planned Execution:", preview)
 
 print("\n--- Query 1: Actual Execution ---")
 result_1 = agent.run(query_1, dry_run=False)
 print("Execution Result:", result_1)
 
 print("\n--- Query 2: Reaction Free Energy Steps ---")
-query_2 = "生成反应中间体台阶图对比"
+query_2 = "Generate reaction intermediate free energy step diagram comparison"
 result_2 = agent.run(query_2)
 print("Execution Result:", result_2)
 
 print("\n--- Query 3: Crystallography Interplanar Spacing ---")
-query_3 = "计算晶体立方系晶面间距"
+query_3 = "Calculate cubic crystal d-spacing"
 result_3 = agent.run(query_3)
 print("Calculation Result:", result_3)
+
+print("\n--- Query 4: CP2K Input Card Generation ---")
+query_4 = "Build cp2k input file from aimd.cif"
+result_4 = agent.run(query_4, dry_run=True)
+print("Simulation Plan:", result_4)
