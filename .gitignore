@@ -26,6 +26,14 @@ htmlcov/
 outputs/
 .cache/
 _analysis/
+working_dire/
+*.tif
+*.tiff
+*.psd
+*.cube
+
+# Legacy root scripts (refactored into my_sci_toolkit)
+/*.py
 
 # IDE and OS files
 .vscode/

@@ -14,6 +14,9 @@ from my_sci_toolkit.simulation.cp2k.parser import (
     CP2KParser,
     read_cp2k_colvar,
     read_cp2k_energy_trajectory,
+    parse_cp2k_hirshfeld_charges,
+    load_bader_charges,
+    calibrate_bader_from_hirshfeld,
 )
 
 __all__ = [
@@ -26,4 +29,7 @@ __all__ = [
     "CP2KParser",
     "read_cp2k_colvar",
     "read_cp2k_energy_trajectory",
+    "parse_cp2k_hirshfeld_charges",
+    "load_bader_charges",
+    "calibrate_bader_from_hirshfeld",
 ]

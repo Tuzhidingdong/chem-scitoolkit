@@ -17,10 +17,11 @@ It natively includes a **Natural Language Interface** powered by either **free, 
   - [1.1 GitHub One-Line Direct Install](#11-github-one-line-direct-install)
   - [1.2 Local Development Installation](#12-local-development-installation)
   - [1.3 PyPI Release Preparation](#13-pypi-release-preparation)
-- [2. Natural Language Interface (Free Local LLMs)](#2-natural-language-interface-free-local-llms)
+- [2. Natural Language Interface (Free Local LLMs & Agent Skill)](#2-natural-language-interface-free-local-llms--agent-skill)
   - [2.1 Running with Local Ollama (Zero Cost, No API Key)](#21-running-with-local-ollama-zero-cost-no-api-key)
   - [2.2 CLI Usage](#22-cli-usage)
   - [2.3 Python API Agent Usage](#23-python-api-agent-usage)
+  - [2.4 Antigravity AI Agent Skill (`@chem-scitoolkit`)](#24-antigravity-ai-agent-skill-chem-scitoolkit)
 - [3. Complete API Feature Index](#3-complete-api-feature-index)
   - [3.1 `kinetics`: Reaction Dynamics & Thermodynamics](#31-kinetics-reaction-dynamics--thermodynamics)
   - [3.2 `simulation`: Multi-Code Quantum & MD Builders (CP2K, VASP, ORCA, Multiwfn, LAMMPS)](#32-simulation-multi-code-quantum--md-builders-cp2k-vasp-orca-multiwfn-lammps)
@@ -127,6 +128,22 @@ agent = Agent(backend="auto", output_dir="./outputs")
 res = agent.run("Plot comparison kinetics of 40min capillary vs 26h bulk water oxidation")
 print("Saved figure artifact:", res["artifact"])
 ```
+
+### 2.4 Antigravity AI Agent Skill (`@chem-scitoolkit`)
+
+This repository includes a native workspace Agent Skill under `.agents/skills/chem-scitoolkit/` (and `.agent/skills/chem-scitoolkit/`).
+
+When interacting with the Antigravity AI coding assistant, you can invoke the toolkit directly by mentioning `@chem-scitoolkit`:
+
+```markdown
+@chem-scitoolkit Please parse the CP2K Bader charges from my calculation directory and plot the orbital-projected PDOS aligned to the Fermi level.
+```
+
+The skill automatically loads runbooks and API instructions for:
+- Automated CP2K, VASP, and ORCA input generation and output parsing
+- QTAIM topological Bader charge calibration and Hirshfeld charge conversion
+- Differential capacity ($dQ/dV$) and EIS Nyquist equivalent circuit fitting
+- Nature/JACS-compliant 600 DPI publication graphics and multi-panel collage assembly
 
 ---
 

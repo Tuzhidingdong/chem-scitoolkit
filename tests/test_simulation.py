@@ -51,3 +51,24 @@ def test_slurm_script_generator():
 
     slurm_vasp = generate_slurm_script(job_name="vasp_calc", software="vasp", nodes=1, ntasks_per_node=64)
     assert "mpirun -np 64 vasp_std" in slurm_vasp
+
+
+def test_calibrate_bader_from_hirshfeld():
+    import pandas as pd
+    from my_sci_toolkit.simulation.cp2k import calibrate_bader_from_hirshfeld
+
+    hirsh_data = {
+        "atom_id": [1, 2, 3],
+        "element": ["U", "O", "O"],
+        "net_charge": [1.45, -0.725, -0.725]
+    }
+    df = pd.DataFrame(hirsh_data)
+    valences = {"U": 14.0, "O": 6.0}
+    bader_df = calibrate_bader_from_hirshfeld(df, atom_valences=valences)
+
+    assert "bader_net_charge" in bader_df.columns
+    assert "bader_population" in bader_df.columns
+    assert len(bader_df) == 3
+    # Check charge neutrality
+    assert abs(bader_df["bader_net_charge"].sum()) < 1e-4
+
