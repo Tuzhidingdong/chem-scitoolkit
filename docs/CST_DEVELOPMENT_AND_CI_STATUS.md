@@ -49,3 +49,29 @@ The skipped test covers the optional ASE runtime because ASE is not installed by
 - The optional `cp2klint`, `cp2k_pdos` and ASE integration paths need a separate opt-in integration environment and representative CP2K fixtures.
 - No production CP2K calculation, external DFT program or Slurm job was launched.
 - This Draft PR remains open and unmerged.
+
+
+## Latest reviewed patch and validation
+
+Additional commits after the first status note:
+- `fc7eb12ad9afbedce15dacff05653d9f9b9fd89c` — preserve Gaussian cube coordinate-unit sign metadata and reject mixed-unit comparisons.
+- `dde5b6540d38aa582bb5c0b9807d93a8e5f20791` — correct cube fixture line delimiters.
+- `2208e916a56e88cb3b0b539f8e150d67ebd3b9c1` — move DFT `&PRINT` out of `&XC` and add section-order regression assertion.
+- `7efa2d4197c49b40698750b75d063c6e82af91c8` — supply the full 2×2×2 cube fixture (eight scalar values).
+
+Final code-validation commit: `7efa2d4197c49b40698750b75d063c6e82af91c8`.
+
+Final matrix run:
+https://github.com/Tuzhidingdong/chem-scitoolkit/actions/runs/45925131884
+
+- Python 3.10 job `140264566081`: `26 passed, 1 skipped`.
+- Python 3.11 job `140264565876`: `26 passed, 1 skipped`.
+- Python 3.12 job `140264566090`: `26 passed, 1 skipped`.
+- All three jobs completed dependency installation and `pytest tests/ -v` successfully; logs were fetched and inspected.
+
+The two failed intermediate runs are retained as history and were corrected:
+- Run `45924871826`: the cube test fixture wrote literal backslash-n characters, so the parser correctly treated it as a truncated one-line file.
+- Run `45924970050`: after fixing line delimiters, the test declared a 2×2×2 grid (8 values) but supplied only 4 scalar values. The fixture was corrected to include 8 values.
+- Run `45925042072`: same incomplete scalar fixture was still present while the DFT `&PRINT` placement fix was committed; run was not counted as a pass.
+
+The only final skipped item is the optional ASE numerical thermochemistry test because the core `.[dev]` workflow does not install the `chem` extra. Optional `cp2klint`, `cp2k_pdos` and actual CP2K parser/tool integrations still require a separately enabled integration environment.
