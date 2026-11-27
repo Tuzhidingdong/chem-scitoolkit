@@ -49,6 +49,19 @@ def test_finite_builder_adds_explicit_cluster_controls_and_kind_specific_basis()
     assert text.count("      Cu_") == 2
 
 
+def test_triclinic_finite_cell_centers_coordinates_at_parallelepiped_center():
+    builder = CP2KInputBuilder(project_name="triclinic_cluster", run_type="ENERGY")
+    text = builder.build_finite_system(
+        [("H", 0.0, 0.0, 0.0)],
+        {"a":10,"b":10,"c":10,"alpha":90,"beta":90,"gamma":60},
+        kind_definitions={"H":{"element":"H","basis_set":"B","potential":"P","valence_electrons":1}},
+        total_charge=0, multiplicity=2, uks=True, center_coordinates=True,
+    )
+    coordinate_line = next(line for line in text.splitlines() if line.strip().startswith("H "))
+    values = [float(value) for value in coordinate_line.split()[1:4]]
+    assert values == pytest.approx([7.5, 4.3301270189, 5.0], abs=1e-8)
+
+
 def test_finite_builder_rejects_missing_kind_bad_parity_and_ot_mixing():
     builder = CP2KInputBuilder(project_name="invalid_cluster", run_type="ENERGY")
     with pytest.raises(ValueError, match="KIND definitions"):

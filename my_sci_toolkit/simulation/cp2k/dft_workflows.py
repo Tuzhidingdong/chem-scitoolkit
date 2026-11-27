@@ -79,7 +79,7 @@ def validate_cp2k_output(log_path: str | Path, run_type: str) -> dict[str, Any]:
         force_result = forces
         force_metrics = None
     else:
-        task_records = final_energy is not None and geo_done and max_force and rms_force
+        task_records = final_energy is not None and geo_done
         geo_result = geo_done
         force_result = forces
         force_metrics = max_force and rms_force

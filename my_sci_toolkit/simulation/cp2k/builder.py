@@ -305,9 +305,22 @@ class CP2KInputBuilder(BaseInputBuilder):
         angles = [float(cell.get(axis, 90.0)) for axis in ("alpha", "beta", "gamma")]
         if not all(math.isfinite(v) and 0 < v < 180 for v in angles):
             raise ValueError("cell angles must lie between 0 and 180 degrees")
+        alpha_r, beta_r, gamma_r = [math.radians(value) for value in angles]
+        sin_gamma = math.sin(gamma_r)
+        if abs(sin_gamma) < 1.0e-10:
+            raise ValueError("cell gamma angle produces a degenerate lattice")
+        a_vec = [lengths[0], 0.0, 0.0]
+        b_vec = [lengths[1] * math.cos(gamma_r), lengths[1] * sin_gamma, 0.0]
+        c_x = lengths[2] * math.cos(beta_r)
+        c_y = lengths[2] * (math.cos(alpha_r) - math.cos(beta_r) * math.cos(gamma_r)) / sin_gamma
+        c_z_sq = lengths[2] ** 2 - c_x ** 2 - c_y ** 2
+        if c_z_sq <= 1.0e-12:
+            raise ValueError("cell lengths and angles describe a degenerate or impossible lattice")
+        c_vec = [c_x, c_y, math.sqrt(c_z_sq)]
         if center_coordinates:
             centroid = [sum(row[i] for row in xyz) / len(xyz) for i in range(3)]
-            shift = [lengths[i] / 2.0 - centroid[i] for i in range(3)]
+            target = [(a_vec[i] + b_vec[i] + c_vec[i]) / 2.0 for i in range(3)]
+            shift = [target[i] - centroid[i] for i in range(3)]
             xyz = [[row[i] + shift[i] for i in range(3)] for row in xyz]
 
         charge = self.config.charge if total_charge is None else int(total_charge)
@@ -333,6 +346,8 @@ class CP2KInputBuilder(BaseInputBuilder):
             raise ValueError("valence_electrons is required for every KIND for open-shell parity validation")
 
         functional = str(xc_functional or self.functional).upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", functional):
+            raise ValueError("xc_functional must be a valid CP2K section label")
         cutoff = float(self.cutoff_ry if cutoff_ry is None else cutoff_ry)
         rel_cutoff = float(self.rel_cutoff_ry if rel_cutoff_ry is None else rel_cutoff_ry)
         if cutoff <= 0 or rel_cutoff <= 0 or not math.isfinite(cutoff + rel_cutoff):
@@ -360,6 +375,8 @@ class CP2KInputBuilder(BaseInputBuilder):
             lines += ["      &DIAGONALIZATION T", "      &END DIAGONALIZATION"]
         if smearing:
             smear_method = str(smearing.get("method", "FERMI_DIRAC")).upper()
+            if smear_method not in {"FERMI_DIRAC", "ENERGY_WINDOW", "LIST", "GAUSSIAN", "METHFESSEL_PAXTON", "MARZARI_VANDERBILT"}:
+                raise ValueError(f"unsupported smearing method: {smear_method}")
             temperature = float(smearing.get("temperature_k", 0.0))
             if not math.isfinite(temperature) or temperature <= 0:
                 raise ValueError("smearing.temperature_k must be positive and finite")
@@ -373,6 +390,8 @@ class CP2KInputBuilder(BaseInputBuilder):
             lines.append(f"      ADDED_MOS {int(added_mos)}")
         if mixing:
             mix_method = str(mixing.get("method", "BROYDEN_MIXING")).upper()
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", mix_method):
+                raise ValueError("mixing method must be a CP2K keyword token")
             alpha = float(mixing.get("alpha", 0.4))
             buffer = int(mixing.get("n_buffer", 5))
             if not math.isfinite(alpha) or not 0 < alpha <= 1 or buffer < 1:
@@ -386,6 +405,11 @@ class CP2KInputBuilder(BaseInputBuilder):
             f"        &{functional}", f"        &END {functional}", "      &END XC_FUNCTIONAL",
         ]
         if dispersion_model:
+            if not re.fullmatch(r"[A-Z0-9_()+-]+", str(dispersion_model).upper()):
+                raise ValueError("dispersion_model must be a single CP2K token")
+            for value in (dispersion_parameter_file, dispersion_reference_functional):
+                if value is not None and ("\n" in str(value) or "\r" in str(value)):
+                    raise ValueError("dispersion settings must be single-line values")
             lines += ["      &VDW_POTENTIAL", "        POTENTIAL_TYPE PAIR_POTENTIAL",
                       "        &PAIR_POTENTIAL", f"          TYPE {str(dispersion_model).upper()}"]
             if dispersion_parameter_file:
