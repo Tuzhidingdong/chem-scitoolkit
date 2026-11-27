@@ -417,17 +417,18 @@ class CP2KInputBuilder(BaseInputBuilder):
             if dispersion_reference_functional:
                 lines.append(f"          REFERENCE_FUNCTIONAL {dispersion_reference_functional}")
             lines += ["        &END PAIR_POTENTIAL", "      &END VDW_POTENTIAL"]
+        lines.append("    &END XC")
         allowed_print = {"MO_CUBES", "E_DENSITY_CUBE", "V_HARTREE_CUBE", "PDOS", "HIRSHFELD", "MULLIKEN"}
         if print_sections:
-            lines += ["      &PRINT"]
+            lines += ["    &PRINT"]
             for section in print_sections:
                 name = str(section).upper()
                 if name not in allowed_print:
                     raise ValueError(f"unsupported print section: {section}")
-                lines += [f"        &{name}", f"        &END {name}"]
-            lines.append("      &END PRINT")
+                lines += [f"      &{name}", f"      &END {name}"]
+            lines += ["    &END PRINT"]
         lines += [
-            "    &END XC", "  &END DFT", "  &SUBSYS", "    &CELL",
+            "  &END DFT", "  &SUBSYS", "    &CELL",
             f"      ABC {lengths[0]:.8f} {lengths[1]:.8f} {lengths[2]:.8f}",
             f"      ALPHA_BETA_GAMMA {angles[0]:g} {angles[1]:g} {angles[2]:g}",
             f"      PERIODIC {cell_periodicity}", "    &END CELL", "    &COORD",

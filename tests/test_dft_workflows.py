@@ -46,6 +46,7 @@ def test_finite_builder_adds_explicit_cluster_controls_and_kind_specific_basis()
     assert "&SMEAR ON" in text and "&MIXING ON" in text
     assert "ELECTRONIC_TEMPERATURE [K] 300" in text
     assert "ADDED_MOS 6" in text and "&PDOS" in text
+    assert text.index("    &END XC") < text.index("    &PRINT") < text.index("    &END PRINT") < text.index("  &END DFT")
     assert text.count("      Cu_") == 2
 
 
