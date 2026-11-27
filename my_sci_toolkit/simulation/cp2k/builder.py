@@ -276,8 +276,8 @@ class CP2KInputBuilder(BaseInputBuilder):
         method = str(scf_method).upper()
         if method not in {"OT", "DIAGONALIZATION"}:
             raise ValueError("scf_method must be OT or DIAGONALIZATION")
-        if smearing and method != "DIAGONALIZATION":
-            raise ValueError("smearing requires DIAGONALIZATION; OT and smearing are not combined")
+        if (smearing or mixing) and method != "DIAGONALIZATION":
+            raise ValueError("smearing and advanced SCF mixing require DIAGONALIZATION; direct OT does not support them")
         if not math.isfinite(float(eps_scf)) or eps_scf <= 0 or int(max_scf) < 1:
             raise ValueError("eps_scf and max_scf must be positive")
         if not basis_file_name or not potential_file_name:
@@ -355,16 +355,16 @@ class CP2KInputBuilder(BaseInputBuilder):
             f"      MAX_SCF {int(max_scf)}",
         ]
         if method == "OT":
-            lines += ["      &OT", "        MINIMIZER DIIS", "        PRECONDITIONER FULL_SINGLE_INVERSE", "      &END OT"]
+            lines += ["      &OT T", "        MINIMIZER DIIS", "        PRECONDITIONER FULL_SINGLE_INVERSE", "      &END OT"]
         else:
-            lines += ["      &DIAGONALIZATION", "      &END DIAGONALIZATION"]
+            lines += ["      &DIAGONALIZATION T", "      &END DIAGONALIZATION"]
         if smearing:
             smear_method = str(smearing.get("method", "FERMI_DIRAC")).upper()
             temperature = float(smearing.get("temperature_k", 0.0))
             if not math.isfinite(temperature) or temperature <= 0:
                 raise ValueError("smearing.temperature_k must be positive and finite")
             lines += [
-                "      &SMEAR", f"        METHOD {smear_method}",
+                "      &SMEAR ON", f"        METHOD {smear_method}",
                 f"        ELECTRONIC_TEMPERATURE [K] {temperature:g}", "      &END SMEAR",
             ]
         if added_mos is not None:
@@ -378,7 +378,7 @@ class CP2KInputBuilder(BaseInputBuilder):
             if not math.isfinite(alpha) or not 0 < alpha <= 1 or buffer < 1:
                 raise ValueError("mixing alpha must be in (0, 1] and n_buffer positive")
             lines += [
-                "      &MIXING", f"        METHOD {mix_method}",
+                "      &MIXING ON", f"        METHOD {mix_method}",
                 f"        ALPHA {alpha:g}", f"        NBUFFER {buffer}", "      &END MIXING",
             ]
         lines += [
