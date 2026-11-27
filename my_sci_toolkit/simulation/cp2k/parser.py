@@ -1,6 +1,7 @@
 """CP2K output log, trajectory, and free energy parser."""
 
 import re
+import warnings
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
@@ -152,7 +153,7 @@ def calibrate_bader_from_hirshfeld(
     atom_valences: Dict[str, float],
     scaling_factors: Optional[Dict[str, float]] = None,
 ) -> pd.DataFrame:
-    """Calibrate topological Bader charges from self-consistent Hirshfeld output.
+    """Deprecated approximate Hirshfeld calibration alias; this does not compute true Bader charges.
 
     Parameters
     ----------
@@ -169,6 +170,12 @@ def calibrate_bader_from_hirshfeld(
     pd.DataFrame
         Calibrated DataFrame with Bader electron population and net charge.
     """
+    warnings.warn(
+        "calibrate_bader_from_hirshfeld is deprecated: it is an approximate calibrated Hirshfeld "
+        "estimate, not a true Bader calculation. Use estimate_hirshfeld_charges for new work.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     if scaling_factors is None:
         scaling_factors = {
             "U": 1.6955,
@@ -207,4 +214,5 @@ def calibrate_bader_from_hirshfeld(
     df["valence_electrons"] = valences
     df["bader_population"] = np.round(valences - bader_q, 6)
     df["bader_net_charge"] = np.round(bader_q, 6)
+    df["charge_method"] = "legacy_approximate_calibrated_hirshfeld_not_true_bader"
     return df
