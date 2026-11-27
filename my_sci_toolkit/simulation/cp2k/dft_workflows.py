@@ -261,7 +261,7 @@ def read_cube(path: str | Path) -> dict[str, Any]:
         raise ValueError("multi-orbital cube files are not supported by this single-field reader")
     atom_count = atom_count_signed
     origin = np.asarray([float(x) for x in atom_fields[1:4]], dtype=float)
-    dimensions, vectors = [], []
+    dimensions, vectors, signs = [], [], []
     for line in lines[3:6]:
         fields = line.split()
         if len(fields) < 4:
@@ -269,8 +269,12 @@ def read_cube(path: str | Path) -> dict[str, Any]:
         signed_count = int(fields[0])
         if signed_count == 0:
             raise ValueError("cube grid dimension cannot be zero")
+        signs.append(-1 if signed_count < 0 else 1)
         dimensions.append(abs(signed_count))
         vectors.append([float(x) for x in fields[1:4]])
+    if len(set(signs)) != 1:
+        raise ValueError("cube grid axes use mixed coordinate-unit signs; refusing ambiguous geometry")
+    coordinate_unit = "bohr" if signs[0] < 0 else "angstrom"
     atom_records = []
     for line in lines[6:6 + atom_count]:
         fields = line.split()
@@ -298,6 +302,7 @@ def read_cube(path: str | Path) -> dict[str, Any]:
         "atom_count": atom_count,
         "origin": origin,
         "grid_dimensions": tuple(dimensions),
+        "coordinate_unit": coordinate_unit,
         "voxel_vectors": np.asarray(vectors, dtype=float),
         "atoms": atom_records,
         "values": data.reshape(tuple(dimensions)),
@@ -315,6 +320,8 @@ def validate_cube_compatibility(
     reasons = []
     if first["grid_dimensions"] != second["grid_dimensions"]:
         reasons.append("grid_dimensions_mismatch")
+    if first.get("coordinate_unit", "bohr") != second.get("coordinate_unit", "bohr"):
+        reasons.append("coordinate_unit_mismatch")
     if not np.allclose(first["origin"], second["origin"], atol=tolerance, rtol=0):
         reasons.append("origin_mismatch")
     if not np.allclose(first["voxel_vectors"], second["voxel_vectors"], atol=tolerance, rtol=0):

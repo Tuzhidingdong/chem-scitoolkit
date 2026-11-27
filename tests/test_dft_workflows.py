@@ -119,6 +119,29 @@ def test_cube_subtraction_requires_identical_grid_and_atom_mapping(tmp_path):
         subtract_cube_fields(a,read_cube(second))
 
 
+def test_cube_coordinate_unit_sign_is_preserved_and_mixed_units_are_rejected(tmp_path):
+    def write_cube(path, signed_count):
+        path.write_text("\\n".join([
+            "cube", "unit fixture", "1 0 0 0",
+            f"{signed_count} 1 0 0", f"{signed_count} 0 1 0", f"{signed_count} 0 0 1",
+            "1 1.0 0.0 0.0 0.0", "0.1 0.2 0.3 0.4",
+        ])+"\\n",encoding="utf-8")
+    ang=tmp_path/"angstrom.cube"; bohr=tmp_path/"bohr.cube"
+    write_cube(ang,2); write_cube(bohr,-2)
+    a,b=read_cube(ang),read_cube(bohr)
+    assert a["coordinate_unit"]=="angstrom"
+    assert b["coordinate_unit"]=="bohr"
+    with pytest.raises(ValueError,match="coordinate_unit_mismatch"):
+        subtract_cube_fields(a,b)
+    mixed=tmp_path/"mixed.cube"
+    mixed.write_text("\\n".join([
+        "cube","mixed fixture","1 0 0 0","2 1 0 0","-2 0 1 0","2 0 0 1",
+        "1 1.0 0.0 0.0 0.0","0.1 0.2 0.3 0.4",
+    ])+"\\n",encoding="utf-8")
+    with pytest.raises(ValueError,match="mixed coordinate-unit signs"):
+        read_cube(mixed)
+
+
 def test_vacuum_plateau_and_energy_reference_are_fail_closed():
     plateau=detect_vacuum_plateau(
         [0,1,2,3,4],[1.0,2.0,2.001,2.0,2.001],
