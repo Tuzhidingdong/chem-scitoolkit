@@ -125,7 +125,7 @@ def test_cube_coordinate_unit_sign_is_preserved_and_mixed_units_are_rejected(tmp
         path.write_text("\n".join([
             "cube", "unit fixture", "1 0 0 0",
             f"{signed_count} 1 0 0", f"{signed_count} 0 1 0", f"{signed_count} 0 0 1",
-            "1 1.0 0.0 0.0 0.0", "0.1 0.2 0.3 0.4",
+            "1 1.0 0.0 0.0 0.0", "0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8",
         ])+"\n",encoding="utf-8")
     ang=tmp_path/"angstrom.cube"; bohr=tmp_path/"bohr.cube"
     write_cube(ang,2); write_cube(bohr,-2)
