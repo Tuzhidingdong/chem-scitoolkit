@@ -11,6 +11,7 @@ from my_sci_toolkit.simulation.cp2k.colvars import (
     generate_metadynamics_free_energy_block,
 )
 from my_sci_toolkit.simulation.cp2k.dft_workflows import (
+    validate_cp2k_input,
     validate_cp2k_output,
     estimate_hirshfeld_charges,
     validate_bader_true_results,
@@ -38,6 +39,7 @@ __all__ = [
     "generate_distance_colvar",
     "generate_coordination_colvar",
     "generate_metadynamics_free_energy_block",
+    "validate_cp2k_input",
     "validate_cp2k_output",
     "estimate_hirshfeld_charges",
     "validate_bader_true_results",

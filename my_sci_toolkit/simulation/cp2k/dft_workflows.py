@@ -14,6 +14,33 @@ import numpy as np
 import pandas as pd
 
 
+def validate_cp2k_input(
+    input_path: str | Path,
+    *,
+    base_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Run cp2k-input-tools' cp2klint against a generated/supplied CP2K input file."""
+    source = Path(input_path)
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    executable = shutil.which("cp2klint")
+    if executable is None:
+        raise FileNotFoundError("cp2k-input-tools is optional; executable cp2klint was not found")
+    command = [executable]
+    if base_dir is not None:
+        command.extend(["--base-dir", str(Path(base_dir))])
+    command.append(str(source))
+    completed = subprocess.run(command, check=False, capture_output=True, text=True)
+    return {
+        "status": "passed" if completed.returncode == 0 else "failed",
+        "returncode": int(completed.returncode),
+        "command": command,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+        "validator": "cp2k-input-tools/cp2klint",
+    }
+
+
 def validate_cp2k_output(log_path: str | Path, run_type: str) -> dict[str, Any]:
     """Validate program termination, SCF and task-specific records independently of scheduler state."""
     path = Path(log_path)
