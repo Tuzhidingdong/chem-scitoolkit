@@ -52,6 +52,10 @@ chem = [
     "pymatgen>=2022.0.0",
     "ase>=3.22.0",
 ]
+dft = [
+    "cp2k-input-tools==0.9.3",
+    "cp2k-output-tools==0.5.0",
+]
 md = [
     "MDAnalysis>=2.0.0",
 ]

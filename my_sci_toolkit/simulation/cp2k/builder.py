@@ -219,6 +219,235 @@ class CP2KInputBuilder(BaseInputBuilder):
 
         return "\n".join(lines)
 
+
+
+    def build_finite_system(
+        self,
+        atoms: List[Tuple[str, float, float, float]],
+        cell: Dict[str, float],
+        *,
+        kind_definitions: Dict[str, Dict[str, Any]],
+        total_charge: Optional[int] = None,
+        multiplicity: Optional[int] = None,
+        uks: Optional[bool] = None,
+        cell_periodicity: str = "NONE",
+        poisson_periodicity: str = "NONE",
+        poisson_solver: str = "MT",
+        center_coordinates: bool = False,
+        basis_file_name: str = "BASIS_MOLOPT",
+        potential_file_name: str = "GTH_POTENTIALS",
+        xc_functional: Optional[str] = None,
+        dispersion_model: Optional[str] = None,
+        dispersion_reference_functional: Optional[str] = None,
+        dispersion_parameter_file: Optional[str] = None,
+        cutoff_ry: Optional[float] = None,
+        rel_cutoff_ry: Optional[float] = None,
+        run_type: Optional[str] = None,
+        scf_method: str = "OT",
+        eps_scf: float = 1.0e-6,
+        max_scf: int = 100,
+        smearing: Optional[Dict[str, Any]] = None,
+        added_mos: Optional[int] = None,
+        mixing: Optional[Dict[str, Any]] = None,
+        print_sections: Optional[List[str]] = None,
+    ) -> str:
+        """Build a user-configured finite/cluster CP2K input without changing legacy defaults.
+
+        The atom tuple's first value is the CP2K KIND label. Distinct labels may map
+        to the same element but use different basis or pseudopotential definitions.
+        """
+        import math
+
+        if not atoms:
+            raise ValueError("finite-system builder requires at least one atom")
+        allowed_periodicity = {"NONE", "X", "Y", "Z", "XY", "XZ", "YZ", "XYZ"}
+        cell_periodicity = str(cell_periodicity).upper()
+        poisson_periodicity = str(poisson_periodicity).upper()
+        if cell_periodicity not in allowed_periodicity or poisson_periodicity not in allowed_periodicity:
+            raise ValueError("unsupported cell or Poisson periodicity")
+        if cell_periodicity == "NONE" and poisson_periodicity != "NONE":
+            raise ValueError("non-periodic cells require non-periodic Poisson boundary conditions")
+        solver = str(poisson_solver).upper()
+        if solver not in {"MT", "WAVELET", "ANALYTIC"}:
+            raise ValueError("poisson_solver must be MT, WAVELET or ANALYTIC")
+        task = str(run_type or self.run_type).upper()
+        if task not in {"ENERGY", "ENERGY_FORCE", "GEO_OPT"}:
+            raise ValueError("run_type must be ENERGY, ENERGY_FORCE or GEO_OPT")
+        method = str(scf_method).upper()
+        if method not in {"OT", "DIAGONALIZATION"}:
+            raise ValueError("scf_method must be OT or DIAGONALIZATION")
+        if (smearing or mixing) and method != "DIAGONALIZATION":
+            raise ValueError("smearing and advanced SCF mixing require DIAGONALIZATION; direct OT does not support them")
+        if not math.isfinite(float(eps_scf)) or eps_scf <= 0 or int(max_scf) < 1:
+            raise ValueError("eps_scf and max_scf must be positive")
+        if not basis_file_name or not potential_file_name:
+            raise ValueError("basis_file_name and potential_file_name are required")
+
+        labels = [str(atom[0]) for atom in atoms]
+        required_labels = set(labels)
+        if set(kind_definitions) != required_labels:
+            missing = sorted(required_labels - set(kind_definitions))
+            extra = sorted(set(kind_definitions) - required_labels)
+            raise ValueError(f"KIND definitions must exactly match coordinate labels; missing={missing}, extra={extra}")
+        for label in required_labels:
+            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_+-]*", label):
+                raise ValueError(f"invalid CP2K KIND label: {label!r}")
+            for key in ("element", "basis_set", "potential"):
+                if not kind_definitions[label].get(key):
+                    raise ValueError(f"KIND {label!r} requires {key}")
+
+        xyz = [[float(v) for v in atom[1:4]] for atom in atoms]
+        if not all(math.isfinite(v) for row in xyz for v in row):
+            raise ValueError("all coordinates must be finite")
+        lengths = [float(cell.get(axis, 0.0)) for axis in ("a", "b", "c")]
+        if not all(math.isfinite(v) and v > 0 for v in lengths):
+            raise ValueError("cell requires positive finite a, b and c lengths")
+        angles = [float(cell.get(axis, 90.0)) for axis in ("alpha", "beta", "gamma")]
+        if not all(math.isfinite(v) and 0 < v < 180 for v in angles):
+            raise ValueError("cell angles must lie between 0 and 180 degrees")
+        alpha_r, beta_r, gamma_r = [math.radians(value) for value in angles]
+        sin_gamma = math.sin(gamma_r)
+        if abs(sin_gamma) < 1.0e-10:
+            raise ValueError("cell gamma angle produces a degenerate lattice")
+        a_vec = [lengths[0], 0.0, 0.0]
+        b_vec = [lengths[1] * math.cos(gamma_r), lengths[1] * sin_gamma, 0.0]
+        c_x = lengths[2] * math.cos(beta_r)
+        c_y = lengths[2] * (math.cos(alpha_r) - math.cos(beta_r) * math.cos(gamma_r)) / sin_gamma
+        c_z_sq = lengths[2] ** 2 - c_x ** 2 - c_y ** 2
+        if c_z_sq <= 1.0e-12:
+            raise ValueError("cell lengths and angles describe a degenerate or impossible lattice")
+        c_vec = [c_x, c_y, math.sqrt(c_z_sq)]
+        if center_coordinates:
+            centroid = [sum(row[i] for row in xyz) / len(xyz) for i in range(3)]
+            target = [(a_vec[i] + b_vec[i] + c_vec[i]) / 2.0 for i in range(3)]
+            shift = [target[i] - centroid[i] for i in range(3)]
+            xyz = [[row[i] + shift[i] for i in range(3)] for row in xyz]
+
+        charge = self.config.charge if total_charge is None else int(total_charge)
+        mult = self.config.multiplicity if multiplicity is None else int(multiplicity)
+        if mult < 1:
+            raise ValueError("multiplicity must be >= 1")
+        spin_polarized = (mult > 1) if uks is None else bool(uks)
+        if mult > 1 and not spin_polarized:
+            raise ValueError("multiplicity > 1 requires UKS")
+        has_valence = all("valence_electrons" in kind_definitions[label] for label in required_labels)
+        if has_valence:
+            electron_count = sum(
+                float(kind_definitions[label]["valence_electrons"]) *
+                labels.count(label) for label in required_labels
+            ) - charge
+            if not math.isfinite(electron_count) or electron_count <= 0 or not math.isclose(
+                electron_count, round(electron_count), abs_tol=1.0e-8
+            ):
+                raise ValueError("valence electron count minus charge must be a positive integer")
+            if (int(round(electron_count)) - (mult - 1)) % 2 != 0:
+                raise ValueError("electron-count / multiplicity parity is inconsistent")
+        elif mult > 1:
+            raise ValueError("valence_electrons is required for every KIND for open-shell parity validation")
+
+        functional = str(xc_functional or self.functional).upper()
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", functional):
+            raise ValueError("xc_functional must be a valid CP2K section label")
+        cutoff = float(self.cutoff_ry if cutoff_ry is None else cutoff_ry)
+        rel_cutoff = float(self.rel_cutoff_ry if rel_cutoff_ry is None else rel_cutoff_ry)
+        if cutoff <= 0 or rel_cutoff <= 0 or not math.isfinite(cutoff + rel_cutoff):
+            raise ValueError("cutoff_ry and rel_cutoff_ry must be positive and finite")
+
+        lines = [
+            "&GLOBAL", f"  PROJECT {self.project_name}", f"  RUN_TYPE {task}",
+            "  PRINT_LEVEL LOW", "&END GLOBAL", "",
+            "&FORCE_EVAL", "  METHOD Quickstep", "  &DFT",
+            f"    BASIS_SET_FILE_NAME {basis_file_name}",
+            f"    POTENTIAL_FILE_NAME {potential_file_name}",
+            f"    CHARGE {charge}", f"    MULTIPLICITY {mult}",
+        ]
+        if spin_polarized:
+            lines.append("    UKS TRUE")
+        lines += [
+            "    &MGRID", f"      CUTOFF {cutoff:g}", f"      REL_CUTOFF {rel_cutoff:g}", "    &END MGRID",
+            "    &POISSON", f"      PERIODIC {poisson_periodicity}", f"      PSOLVER {solver}", "    &END POISSON",
+            "    &SCF", "      SCF_GUESS ATOMIC", f"      EPS_SCF {float(eps_scf):.8g}",
+            f"      MAX_SCF {int(max_scf)}",
+        ]
+        if method == "OT":
+            lines += ["      &OT T", "        MINIMIZER DIIS", "        PRECONDITIONER FULL_SINGLE_INVERSE", "      &END OT"]
+        else:
+            lines += ["      &DIAGONALIZATION T", "      &END DIAGONALIZATION"]
+        if smearing:
+            smear_method = str(smearing.get("method", "FERMI_DIRAC")).upper()
+            if smear_method not in {"FERMI_DIRAC", "ENERGY_WINDOW", "LIST", "GAUSSIAN", "METHFESSEL_PAXTON", "MARZARI_VANDERBILT"}:
+                raise ValueError(f"unsupported smearing method: {smear_method}")
+            temperature = float(smearing.get("temperature_k", 0.0))
+            if not math.isfinite(temperature) or temperature <= 0:
+                raise ValueError("smearing.temperature_k must be positive and finite")
+            lines += [
+                "      &SMEAR ON", f"        METHOD {smear_method}",
+                f"        ELECTRONIC_TEMPERATURE [K] {temperature:g}", "      &END SMEAR",
+            ]
+        if added_mos is not None:
+            if int(added_mos) < 0:
+                raise ValueError("added_mos cannot be negative")
+            lines.append(f"      ADDED_MOS {int(added_mos)}")
+        if mixing:
+            mix_method = str(mixing.get("method", "BROYDEN_MIXING")).upper()
+            if not re.fullmatch(r"[A-Z][A-Z0-9_]*", mix_method):
+                raise ValueError("mixing method must be a CP2K keyword token")
+            alpha = float(mixing.get("alpha", 0.4))
+            buffer = int(mixing.get("n_buffer", 5))
+            if not math.isfinite(alpha) or not 0 < alpha <= 1 or buffer < 1:
+                raise ValueError("mixing alpha must be in (0, 1] and n_buffer positive")
+            lines += [
+                "      &MIXING ON", f"        METHOD {mix_method}",
+                f"        ALPHA {alpha:g}", f"        NBUFFER {buffer}", "      &END MIXING",
+            ]
+        lines += [
+            "    &END SCF", "    &XC", "      &XC_FUNCTIONAL",
+            f"        &{functional}", f"        &END {functional}", "      &END XC_FUNCTIONAL",
+        ]
+        if dispersion_model:
+            if not re.fullmatch(r"[A-Z0-9_()+-]+", str(dispersion_model).upper()):
+                raise ValueError("dispersion_model must be a single CP2K token")
+            for value in (dispersion_parameter_file, dispersion_reference_functional):
+                if value is not None and ("\n" in str(value) or "\r" in str(value)):
+                    raise ValueError("dispersion settings must be single-line values")
+            lines += ["      &VDW_POTENTIAL", "        POTENTIAL_TYPE PAIR_POTENTIAL",
+                      "        &PAIR_POTENTIAL", f"          TYPE {str(dispersion_model).upper()}"]
+            if dispersion_parameter_file:
+                lines.append(f"          PARAMETER_FILE_NAME {dispersion_parameter_file}")
+            if dispersion_reference_functional:
+                lines.append(f"          REFERENCE_FUNCTIONAL {dispersion_reference_functional}")
+            lines += ["        &END PAIR_POTENTIAL", "      &END VDW_POTENTIAL"]
+        lines.append("    &END XC")
+        allowed_print = {"MO_CUBES", "E_DENSITY_CUBE", "V_HARTREE_CUBE", "PDOS", "HIRSHFELD", "MULLIKEN"}
+        if print_sections:
+            lines += ["    &PRINT"]
+            for section in print_sections:
+                name = str(section).upper()
+                if name not in allowed_print:
+                    raise ValueError(f"unsupported print section: {section}")
+                lines += [f"      &{name}", f"      &END {name}"]
+            lines += ["    &END PRINT"]
+        lines += [
+            "  &END DFT", "  &SUBSYS", "    &CELL",
+            f"      ABC {lengths[0]:.8f} {lengths[1]:.8f} {lengths[2]:.8f}",
+            f"      ALPHA_BETA_GAMMA {angles[0]:g} {angles[1]:g} {angles[2]:g}",
+            f"      PERIODIC {cell_periodicity}", "    &END CELL", "    &COORD",
+        ]
+        for (label, _, _, _), row in zip(atoms, xyz):
+            lines.append(f"      {label:<12s} {row[0]:.10f} {row[1]:.10f} {row[2]:.10f}")
+        lines.append("    &END COORD")
+        for label in sorted(required_labels):
+            definition = kind_definitions[label]
+            lines += [
+                f"    &KIND {label}", f"      ELEMENT {definition['element']}",
+                f"      BASIS_SET {definition['basis_set']}", f"      POTENTIAL {definition['potential']}",
+                "    &END KIND",
+            ]
+        lines += ["  &END SUBSYS", "&END FORCE_EVAL"]
+        if task == "GEO_OPT":
+            lines += ["", "&MOTION", "  &GEO_OPT", "    OPTIMIZER BFGS", "  &END GEO_OPT", "&END MOTION"]
+        return "\n".join(lines) + "\n"
+
     def build(self, **kwargs) -> str:
         cif_path = kwargs.get("cif_path")
         if not cif_path:

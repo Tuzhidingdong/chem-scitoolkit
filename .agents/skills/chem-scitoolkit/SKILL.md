@@ -155,3 +155,14 @@ fit_result = fit_peaks(x_data, corrected_y, model="voigt", peak_guesses=[520.0, 
 2. **Fermi Level Alignment**: Always align PDOS / LPDOS energy axes to the Fermi energy ($E - E_F = 0$) and specify the energy unit (eV).
 3. **Figure Resolution**: Default all final exported figures to **600 DPI** (`.tif` or `.png`) with transparent or pure white backgrounds.
 4. **Reproducibility**: When scripting data processing or plotting workflows, write self-contained Python scripts that can be re-run directly via CLI.
+
+
+## Explicit finite-system CP2K and DFT post-processing interfaces
+
+- Use \`CP2KInputBuilder.build_finite_system\` only with explicit structure, charge, multiplicity, cell/Poisson periodicity and KIND-specific element, basis and pseudopotential definitions. Different KIND labels may represent the same element with different basis/potential assignments. Open-shell parity validation requires explicit valence-electron metadata.
+- Use \`validate_cp2k_output\` with the requested task type. Program termination, SCF convergence, force output and geometry-optimization completion are separate checks. A scheduler's COMPLETED state is not scientific success.
+- True Bader results must originate from a density-basin calculation and pass atom-order/population validation. \`estimate_hirshfeld_charges\` is explicitly approximate and requires caller-supplied calibration values. The legacy \`calibrate_bader_from_hirshfeld\` name remains for API compatibility, emits a deprecation warning and must not be described as a Bader calculation.
+- \`normalize_cp2k_pdos\` delegates broadening to the optional \`cp2k-output-tools\` executable. Preserve spin-channel, projection, eV energy-axis and source-hash metadata. Vacuum alignment requires an independently validated vacuum plateau and explicit vacuum-minus-Fermi offset.
+- Cube scalar-field subtraction is allowed only after grid dimensions, origin, voxel vectors and ordered atom mappings match. Cube syntax alone cannot determine whether a field is electron density or electrostatic potential.
+- \`ase_harmonic_thermochemistry\` is a thin ASE HarmonicThermo wrapper. Declare the selected mode subspace, frozen-atom scope, temperature and imaginary-mode policy. Input frequencies must already correspond to that declared subspace.
+- Use \`apply_figure_profile\` only when the user or caller explicitly selects a profile. Existing figure styling defaults are unchanged when no profile is applied. Do not hard-code a particular journal, composition or chemical system as the universal default.
